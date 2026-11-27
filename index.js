@@ -1975,7 +1975,16 @@ function closingQuoteIndex(text, quote, from = 1) {
   return -1;
 }
 
+// Issue #457: the public helpers name themselves when called with the wrong
+// type, instead of a raw V8 TypeError, a misleading parse error or a silent
+// empty result. A Buffer is rejected like any other non-string: decode it
+// yourself (readFileSync(file, 'utf8')) so the encoding is a choice.
+function expectString(fn, value, what) {
+  if (typeof value !== 'string') throw new TypeError(`env-saaf: ${fn} expects ${what} as a string`);
+}
+
 function parseEnvFile(text) {
+  expectString('parseEnvFile', text, 'the file contents');
   return parseEnvFileWithSource(text, undefined);
 }
 
@@ -2653,6 +2662,7 @@ function buildLocationsMap(reads, file) {
 
 /** Find every env read in JS/TS source text - `process.env.KEY` and Vite-style `import.meta.env.KEY`. Returns sorted unique names. */
 function scanCode(text) {
+  expectString('scanCode', text, 'source text');
   const keys = new Set();
   for (const hit of collectEnvReads(text)) keys.add(hit.key);
   return [...keys].sort();
@@ -2663,6 +2673,7 @@ function scanCode(text) {
  * `{ file, line }` entries (1-based lines). `file` defaults to `-` for piped text.
  */
 function scanCodeLocations(text, file = '-') {
+  expectString('scanCodeLocations', text, 'source text');
   const src = String(text);
   const reads = collectEnvReads(src).map(({ key, index }) => ({ key, index, text: src }));
   const vars = [...new Set(reads.map((r) => r.key))].sort();
@@ -2765,6 +2776,7 @@ function listScanFiles(dir, options = {}) {
 }
 
 function scanDir(dir, options = {}) {
+  expectString('scanDir', dir, 'a directory path');
   const found = new Set();
   for (const p of listScanFiles(dir, options)) {
     scanCode(fs.readFileSync(p, 'utf8')).forEach(k => found.add(k));
@@ -2777,6 +2789,7 @@ function scanDir(dir, options = {}) {
  * `dir` using forward slashes; lines are 1-based. `vars` matches `scanDir`.
  */
 function scanDirLocations(dir, options = {}) {
+  expectString('scanDirLocations', dir, 'a directory path');
   const root = path.resolve(dir);
   const files = listScanFiles(dir, options)
     .map((abs) => ({
@@ -2814,6 +2827,10 @@ function scanDirLocations(dir, options = {}) {
 
 /** Compare code usage vs a documented set (e.g. keys of .env.example). */
 function diffEnv(usedKeys, documentedKeys) {
+  // Issue #457: both lists must be arrays; a Set or a string used to crash
+  // with a raw "filter is not a function".
+  if (!Array.isArray(usedKeys)) throw new TypeError('env-saaf: diffEnv expects "usedKeys" to be an array');
+  if (!Array.isArray(documentedKeys)) throw new TypeError('env-saaf: diffEnv expects "documentedKeys" to be an array');
   const doc = new Set(documentedKeys);
   const used = new Set(usedKeys);
   return {
@@ -3218,6 +3235,10 @@ function deprecationNotice(option) {
 
 /** Generate .env.example text from a schema. Values are placeholders/defaults only — never real secrets. */
 function generateExample(schema) {
+  // Issue #457: the same up-front check as validateSchema and toJsonSchema, so
+  // null is a named schema error and 42 or [] no longer give an empty file.
+  // Only the shape is checked: generateExample still does not validate rules.
+  if (!isObject(schema)) throw invalidSchema(['schema must be an object']);
   // A key that looks like a secret gets an empty placeholder — there is
   // nothing safe to suggest for it. Whole underscore-separated words only:
   // API_KEY and DB_PASSWORD match, but MONKEY does not (it merely contains

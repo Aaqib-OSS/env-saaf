@@ -4,6 +4,8 @@
 
 - Added: `toJsonSchema` preserves `conflictsWith` as `allOf`/`not` constraints, deduplicates reciprocal pairs, resolves grouped keys to nested JSON paths, and composes with existing `requiredIf` clauses (fixes #465).
 
+- Fixed: the public helpers name themselves when called with the wrong type. `parseEnvFile`, `scanCode`, `scanCodeLocations`, `scanDir` and `scanDirLocations` throw a `TypeError` for a non-string (a `Buffer` included: decode it with `'utf8'` first) instead of a misleading `line 1: expected KEY=VALUE`, a raw path error or a silent empty result; `diffEnv` throws one when either key list is not an array. `generateExample` rejects a non-object schema with the same `Invalid schema: schema must be an object` error as `validateSchema` and `toJsonSchema`. The empty string is still valid, and `maskSecrets` stays permissive (fixes #457).
+
 - Fixed: `scanCode` / `scanDir` (and so `scan` and `check`) no longer report `subprocess.env.X`, `foo.process.env.X`, `this.process.env.X` or `this.#process.env.X` as env reads: `process` must be the global, not part of a longer identifier or a property of another object. `global.process.env` and `globalThis.process.env` are still read, and `const { A } = global.process.env` now is too. `import.meta.env` gets the same boundary (fixes #455).
 
 - Fixed: `check --schema` counts schema keys as used and keeps the first-check note for fresh `init --from-example` projects (fixes #506).

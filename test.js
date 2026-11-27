@@ -877,6 +877,12 @@ assert.deepStrictEqual(scanCode("import { env } from './config'; env.FOO;"), [])
 assert.deepStrictEqual(scanCode("const { env } = require('./config'); env.FOO;"), []);
 assert.deepStrictEqual(scanCode("import env from 'node:process'; env.FOO;"), []);
 assert.deepStrictEqual(diffEnv(['A', 'B'], ['A', 'C']), { usedNotDocumented: ['B'], documentedNotUsed: ['C'] });
+// Issue #457: both key lists must be arrays, and the message names the argument.
+for (const value of [null, undefined, 'A', new Set(['A']), { A: 1 }]) {
+  assert.throws(() => diffEnv(value, ['A']), { name: 'TypeError', message: 'env-saaf: diffEnv expects "usedKeys" to be an array' });
+  assert.throws(() => diffEnv(['A'], value), { name: 'TypeError', message: 'env-saaf: diffEnv expects "documentedKeys" to be an array' });
+}
+assert.deepStrictEqual(diffEnv([], []), { usedNotDocumented: [], documentedNotUsed: [] });
 
 // Issue #221: assignment-shaped lines with invalid keys must not disappear.
 {
@@ -3103,6 +3109,41 @@ assert.deepStrictEqual(
   assert.deepStrictEqual(parseEnvFile(''), {});
   // A lone comment line is not a path, even when it mentions one.
   assert.deepStrictEqual(parseEnvFile('# see config/notes'), {});
+}
+
+// Issue #457: the text and path helpers name themselves for a non-string,
+// a Buffer included, instead of a misleading parse error, a raw V8 message or
+// a silent empty result. The empty string is still valid input.
+{
+  const named = (fn, what) => ({ name: 'TypeError', message: `env-saaf: ${fn} expects ${what} as a string` });
+  for (const value of [42, null, undefined, {}, ['A=1'], Buffer.from('A=1')]) {
+    assert.throws(() => parseEnvFile(value), named('parseEnvFile', 'the file contents'));
+    assert.throws(() => scanCodeLocations(value), named('scanCodeLocations', 'source text'));
+    assert.throws(() => scanDir(value), named('scanDir', 'a directory path'));
+    assert.throws(() => scanDirLocations(value), named('scanDirLocations', 'a directory path'));
+  }
+  assert.throws(() => scanCode(Buffer.from('process.env.A')), named('scanCode', 'source text'));
+  assert.deepStrictEqual(scanCodeLocations(''), { vars: [], locations: {} });
+  // A path given as a string is still the #82 Error, not a TypeError.
+  assert.throws(() => parseEnvFile('.env'), (err) => err.constructor === Error && /not a file path/.test(err.message));
+}
+
+// Issue #457: generateExample rejects a non-object schema with the schema
+// error the other schema helpers already use, and still does not validate
+// rules. Those helpers, loadEnv and the permissive maskSecrets keep their
+// current behaviour.
+{
+  const notAnObject = (err) => err instanceof EnvSaafError && err.message === 'Invalid schema:\n  - schema must be an object';
+  for (const value of [null, undefined, 42, 'A', []]) {
+    assert.throws(() => generateExample(value), notAnObject);
+    assert.throws(() => toJsonSchema(value), notAnObject);
+    assert.throws(() => validateSchema(value), notAnObject);
+    assert.throws(() => validateEnv(value, {}), notAnObject);
+  }
+  assert.ok(generateExample({ A: { type: 'string', choices: 42 } }).includes('A=your_value_here'));
+  assert.throws(() => loadEnv(null), (err) => err instanceof EnvSaafError && /^loadEnv expects a schema object as the first argument/.test(err.message));
+  assert.strictEqual(maskSecrets(null), null);
+  assert.strictEqual(maskSecrets('x'), '****');
 }
 
 // Issue #145: bare lines report their position, even after multiline values.
@@ -7010,11 +7051,11 @@ assert.deepStrictEqual(
   assert.deepStrictEqual(scanCode('process.env?.SAME; process.env.SAME; process.env?.SAME;'), ['SAME']);
   // import.meta.env optional reads sort together with process.env ones.
   assert.deepStrictEqual(scanCode('process.env?.ZZZ; import.meta.env?.AAA;'), ['AAA', 'ZZZ']);
-  // Empty / non-string input does not crash and finds nothing.
+  // Empty input finds nothing; a non-string is a named TypeError (issue #457).
   assert.deepStrictEqual(scanCode(''), []);
-  assert.deepStrictEqual(scanCode(null), []);
-  assert.deepStrictEqual(scanCode(undefined), []);
-  assert.deepStrictEqual(scanCode(42), []);
+  for (const value of [null, undefined, 42]) {
+    assert.throws(() => scanCode(value), { name: 'TypeError', message: 'env-saaf: scanCode expects source text as a string' });
+  }
   // `process.env?.` followed by a non-identifier is not a read.
   assert.deepStrictEqual(scanCode('process.env?.9BAD; process.env?.-X;'), []);
   // An optional chain on something that is not `env` is not reported.
