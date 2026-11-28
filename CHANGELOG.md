@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added: `init --from-example` now infers `jwt` for JWT-shaped sample values (three base64url segments whose header and payload decode to JSON objects), like it already does for `url` — a truncated or mangled token still infers as `string` (fixes #493).
+
 - Fixed: `print` now also redacts the password of each item in an `array` of URL values, in text and `--json` output — completing the #505 fix, whose scalar case landed in #514 (thanks @swetajha3). The redaction helper's indentation is fixed too (fixes #505).
 
 - Fixed: `loadEnv` / `loadEnvAsync` accept a single string for `paths` and load that one file, instead of reading the string one character at a time and failing with `cannot read .env file at /: EISDIR`. A `paths` value that is neither a string nor an array is rejected with `paths must be a file path or an array of file paths` (fixes #520).
