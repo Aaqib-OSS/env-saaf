@@ -278,6 +278,46 @@ try {
   );
 }
 
+  // --- print: passwords in array-of-URL values are redacted (issue #505) ------
+  {
+    const dir = mkProject({
+      'env.schema.js': [
+        'module.exports = {',
+        "  DATABASE_URL: { type: 'url', required: true },",
+        "  REPLICAS: { type: 'array', of: 'url', required: true },",
+        "  NAME: { type: 'string', required: true },",
+        '};',
+        '',
+      ].join('\n'),
+      '.env': [
+        'DATABASE_URL=postgres://user:pass@localhost:5432/mydb',
+        'REPLICAS=mysql://ro:pw1@db1:3306/app,mysql://ro:pw2@db2:3306/app',
+        'NAME=a:b@c',
+        '',
+      ].join('\n'),
+    });
+    const text = run(['print', dir, '--schema', 'env.schema.js'], dir);
+    assert.strictEqual(text.status, 0, text.stderr);
+    assert.match(text.stdout, /^DATABASE_URL=postgres:\/\/user:\*\*\*@localhost:5432\/mydb$/m);
+    assert.match(text.stdout, /^REPLICAS=\["mysql:\/\/ro:\*\*\*@db1:3306\/app","mysql:\/\/ro:\*\*\*@db2:3306\/app"\]$/m);
+    // No password: the URL prints exactly as before, as does a non-URL value.
+    assert.match(text.stdout, /^NAME=a:b@c$/m);
+    for (const secret of ['pass@', 'pw1', 'pw2']) {
+      assert.ok(!text.stdout.includes(secret), `text output leaks ${secret}`);
+    }
+
+    const json = run(['print', dir, '--schema', 'env.schema.js', '--json'], dir);
+    assert.strictEqual(json.status, 0, json.stderr);
+    const values = JSON.parse(json.stdout);
+    assert.strictEqual(values.DATABASE_URL, 'postgres://user:***@localhost:5432/mydb');
+    assert.deepStrictEqual(values.REPLICAS, ['mysql://ro:***@db1:3306/app', 'mysql://ro:***@db2:3306/app']);
+    assert.strictEqual(values.NAME, 'a:b@c');
+
+    // --reveal still prints the real values.
+    const revealed = run(['print', dir, '--schema', 'env.schema.js', '--json', '--reveal'], dir);
+    assert.strictEqual(JSON.parse(revealed.stdout).REPLICAS[0], 'mysql://ro:pw1@db1:3306/app');
+  }
+
   // --- unknown command prints usage and exits 2 -------------------------------
   {
     const dir = mkProject({});
