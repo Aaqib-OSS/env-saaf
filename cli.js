@@ -916,6 +916,12 @@ function looksSecretName(name) {
 }
 
 function maskUrlPassword(value) {
+  // Issue #505: a URL can carry a password (postgres://user:pass@host/db) under a
+  // key that is neither sensitive nor secret-named. Redact only the password, so
+  // scheme, user, host, port, path and query stay readable for debugging.
+  // Applies to plain strings and to each item of an array of URLs (#514 did the
+  // scalar case; this completes it for arrays).
+  if (Array.isArray(value)) return value.map(maskUrlPassword);
   if (typeof value !== 'string') return value;
 
   const match = /^([a-z][a-z0-9+.-]*:\/\/[^/?#@]*:)([^/?#@]*)@/i.exec(value);
@@ -930,11 +936,11 @@ function maskBySchema(schema, values, prefix = '') {
     if (!Object.prototype.hasOwnProperty.call(out, key)) continue;
     if (rule && typeof rule === 'object' && rule.schema && typeof rule.prefix === 'string') {
       out[key] = maskBySchema(rule.schema, out[key], prefix + rule.prefix);
-   } else if (rule && (rule.sensitive === true || looksSecretName(prefix + key))) {
-  out[key] = typeof out[key] === 'string' ? maskValue(out[key]) : '[REDACTED]';
-} else if (typeof out[key] === 'string') {
-  out[key] = maskUrlPassword(out[key]);
-}
+    } else if (rule && (rule.sensitive === true || looksSecretName(prefix + key))) {
+      out[key] = typeof out[key] === 'string' ? maskValue(out[key]) : '[REDACTED]';
+    } else {
+      out[key] = maskUrlPassword(out[key]);
+    }
   }
   return out;
 }

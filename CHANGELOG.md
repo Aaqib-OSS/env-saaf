@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed: `print` now also redacts the password of each item in an `array` of URL values, in text and `--json` output — completing the #505 fix, whose scalar case landed in #514 (thanks @swetajha3). The redaction helper's indentation is fixed too (fixes #505).
+
 - Fixed: `loadEnv` / `loadEnvAsync` accept a single string for `paths` and load that one file, instead of reading the string one character at a time and failing with `cannot read .env file at /: EISDIR`. A `paths` value that is neither a string nor an array is rejected with `paths must be a file path or an array of file paths` (fixes #520).
 
 - Fixed: `validateSchema` now rejects a `default` that is not in `choices` (or fails coercion against `choices`) at schema validation time instead of waiting until `validateEnv` runs with the key unset (fixes #519).
