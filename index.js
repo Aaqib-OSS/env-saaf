@@ -537,9 +537,12 @@ function validateSchemaRules(schema, warn, patterns = new Map(), prefix = '', an
     // them from the generated `enum` on purpose, so they stay valid here.
     if (Array.isArray(rule.choices) && rule.choices.length > 0) {
       const choiceType = effectiveType === 'array' ? (rule.of || 'string') : effectiveType;
+      let choicesValid = true;
       if (choiceType === 'date') {
+        choicesValid = false;
         errors.push(`${key}: "choices" cannot be used with type 'date' (a parsed date is a new Date object, so no choice can ever match)`);
       } else if (choiceType === 'json' && rule.choices.some(choice => !isJsonChoice(choice))) {
+        choicesValid = false;
         errors.push(`${key}: "choices" for type 'json' must contain only strings, numbers, booleans or null`);
       } else if (['number', 'int', 'port', 'bigint', 'boolean', 'duration'].includes(choiceType)) {
         for (const choice of rule.choices) {
@@ -551,8 +554,50 @@ function validateSchemaRules(schema, warn, patterns = new Map(), prefix = '', an
           }
           catch { /* not a value this type can produce */ }
           if (!matches) {
+            choicesValid = false;
             const shownChoice = typeof choice === 'string' ? JSON.stringify(choice) : String(choice);
             errors.push(`${key}: "choices" entry ${shownChoice} can never match type '${choiceType}' (a choice must be a value this type can produce)`);
+          }
+        }
+      }
+      // Issue #519: reject a schema default that violates its own `choices` up front,
+      // using the same coercion and comparison validateEnv applies at runtime.
+      const itemTypeOk = effectiveType !== 'array' || rule.of === undefined
+        || (typeof rule.of === 'string' && KNOWN_TYPES.has(rule.of) && rule.of !== 'array');
+      const separatorOk = rule.separator === undefined
+        || (typeof rule.separator === 'string' && rule.separator.length > 0);
+      if (choicesValid && rule.default !== undefined && KNOWN_TYPES.has(effectiveType) && itemTypeOk && separatorOk) {
+        const sensitive = rule.sensitive === true;
+        const shown = sensitive ? maskValue(rule.default) : rule.default;
+        const parsedOk = effectiveType === 'json' || (effectiveType === 'array' && Array.isArray(rule.default));
+        if (rule.default !== null && typeof rule.default === 'object' && !parsedOk) {
+          errors.push(`${key}: "default" expected a string value, got ${Array.isArray(rule.default) ? 'an array' : 'an object'}`);
+        } else if (rule.default === null && effectiveType !== 'json') {
+          errors.push(`${key}: "default" cannot be null for type '${effectiveType}'`);
+        } else {
+          try {
+            const val = coerce(key, rule.default, effectiveType, rule.trim !== false, rule.protocols, sensitive, rule.of, rule.separator, rule.skipEmpty === true);
+            const choices = normalizedChoices(key, rule);
+            const isArray = Array.isArray(val);
+            const badIndex = isArray ? val.findIndex(item => !choices.includes(item)) : -1;
+            if (isArray ? badIndex !== -1 : !choices.includes(val)) {
+              const jsonChoices = effectiveType === 'json' || (effectiveType === 'array' && rule.of === 'json');
+              const expected = (jsonChoices ? rule.choices.map(formatJsonChoice) : rule.choices).join(', ');
+              const actual = isArray ? val[badIndex] : val;
+              let received;
+              if (jsonChoices && !sensitive && isJsonChoice(actual)) {
+                received = formatJsonChoice(actual);
+              } else if (isArray) {
+                const item = safeString(actual);
+                received = `"${sensitive ? maskValue(item) : item}"`;
+              } else {
+                received = `"${shown}"`;
+              }
+              const itemLocation = isArray ? ` (item ${badIndex})` : '';
+              errors.push(`${key}: "default" must be one of [${expected}], got ${received}${itemLocation}`);
+            }
+          } catch (err) {
+            errors.push(err.message);
           }
         }
       }

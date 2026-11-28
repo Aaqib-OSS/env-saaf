@@ -475,9 +475,10 @@ for (const seed of SEEDS) {
     }
 
     // 5. Invalid value names the key, matches { throwOnError: false }, and never leaks a sensitive raw value.
+    const { default: _omittedDefault, ...ruleWithoutDefault } = rule;
     const checkRule = badRaw !== null
       ? { ...rule, sensitive: true }
-      : { ...rule, choices: ['allowed_only'], sensitive: true };
+      : { ...ruleWithoutDefault, choices: ['allowed_only'], sensitive: true };
     const rawSecret = badRaw !== null ? badRaw : `nope_${tag}`;
     const sensSchema = { [key]: checkRule };
     const errCtx = `${baseCtx}\nsensitiveRule: ${formatRule(checkRule)}\nbadInput: ${JSON.stringify(rawSecret)}`;
