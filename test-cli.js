@@ -208,6 +208,39 @@ try {
     assert.ok(!/MISSING/.test(check.stdout), `no MISSING after init in ESM project: ${check.stdout}`);
   }
 
+  // --- init --from-example infers 'jwt' for JWT-shaped values (issue #493) ---
+  {
+    const dir = mkProject({
+      '.env.example': [
+        'AUTH_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c',
+        'DATABASE_URL=postgres://app:changeme@db:5432/appdb',
+        'PORT=3000',
+        '',
+      ].join('\n'),
+    });
+    const init = run(['init', dir, '--from-example'], dir);
+    assert.strictEqual(init.status, 0, init.stderr);
+    const schema = fs.readFileSync(path.join(dir, 'env.schema.js'), 'utf8');
+    assert.match(schema, /AUTH_TOKEN:\s*\{\s*type:\s*'jwt'\s*\}/);
+    assert.match(schema, /DATABASE_URL:\s*\{\s*type:\s*'url'\s*\}/);
+    assert.match(schema, /PORT:\s*\{\s*type:\s*'port'\s*\}/);
+    // The generated schema validates the example's own sample values — but the
+    // JWT sample itself is flagged as a likely real secret (#416), so check
+    // asks for a placeholder instead of passing: the sample must not be
+    // committed as-is.
+    const check = run(['check', dir, '--file', '.env.example', '--schema', 'env.schema.js'], dir);
+    assert.strictEqual(check.status, 1, check.stdout + check.stderr);
+    assert.match(check.stdout, /SECRET in \.env\.example: AUTH_TOKEN/);
+    // A truncated token stays 'string' — inference never invents a jwt rule.
+    const dir2 = mkProject({
+      '.env.example': 'BROKEN_TOKEN=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0\n',
+    });
+    const init2 = run(['init', dir2, '--from-example'], dir2);
+    assert.strictEqual(init2.status, 0, init2.stderr);
+    const schema2 = fs.readFileSync(path.join(dir2, 'env.schema.js'), 'utf8');
+    assert.match(schema2, /BROKEN_TOKEN:\s*\{\s*type:\s*'string'\s*\}/);
+  }
+
   // --- missing directory: exit 2, clear message, no stack trace --------------
   {
     const dir = mkProject({});

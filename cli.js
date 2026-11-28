@@ -388,6 +388,10 @@ function inferTypeFromSample(sample) {
     return n >= 1024 && n <= 65535 ? 'port' : 'int';
   }
   if (/^(true|false)$/i.test(v)) return 'boolean';
+  // Issue #493: infer 'jwt' for JWT-shaped values — three base64url segments
+  // whose header and payload decode to JSON objects. The real validator
+  // confirms it, so a truncated token or 'a.b.c' stays 'string'.
+  if (/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(v) && accepts('jwt')) return 'jwt';
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(v)) {
     // Issue #470: infer 'url' for any absolute URL with an explicit scheme://
     // authority, not just http(s). The real validator (new URL) confirms the
