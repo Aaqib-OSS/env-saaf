@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed: `validateSchema` now rejects a `default` that is not in `choices` (or fails coercion against `choices`) at schema validation time instead of waiting until `validateEnv` runs with the key unset (fixes #519).
+
 ## 1.8.0 — 2026-11-28
 
 - Added: `scanCode` / `scanDir` (and so `scan` and `check`) now detect `Bun.env` reads — dot, bracket, backtick and optional-chaining forms, destructuring, `const env = Bun.env` aliases and `const b = Bun` object aliases — and `Deno.env.get('KEY')` / `Deno.env.has('KEY')` with a static literal. `Deno.env` has no indexable form, so `Deno.env.KEY` and `toObject()` report no single key (fixes #461, #462).
