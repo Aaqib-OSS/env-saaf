@@ -562,7 +562,7 @@ const env = loadEnv({
 }); // reads `.env` by default
 ```
 
-Options: `{ path: '.env.local' }` to read another file, `{ override: true }` to let the file win over `process.env` (by default existing `process.env` values win), `{ assign: true }` to write the validated values back into `process.env` as strings. An explicitly passed `path` that does not exist throws an error naming the path — a typo'd file must not boot silently. Without a `path` option the implicit default `.env` may be absent (every variable then needs a default or optional), and missing entries of a file list (`paths: [...]` or `path` as an array) are skipped; a list throws only when no file at all is found and a required variable is missing. By default `process.env` is never mutated.
+Options: `{ path: '.env.local' }` to read another file, `{ override: true }` to let the file win over `process.env` (by default existing `process.env` values win), `{ assign: true }` to write the validated values back into `process.env` as strings. An explicitly passed `path` that does not exist throws an error naming the path — a typo'd file must not boot silently. Without a `path` option the implicit default `.env` may be absent (every variable then needs a default or optional), and missing entries of a file list (`paths: [...]` or `path` as an array) are skipped (`paths` also takes a single path string, read as a one-file list); a list throws only when no file at all is found and a required variable is missing. By default `process.env` is never mutated.
 
 Several files can be layered — later files override earlier ones:
 

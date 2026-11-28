@@ -324,7 +324,7 @@ export interface LoadEnvOptions<S extends EnvSchema = EnvSchema> {
   /** One file, or several files in order (later files win). */
   path?: string | string[];
   /** Alias for passing several files at once. */
-  paths?: string[];
+  paths?: string | string[];
   env?: Record<string, string | undefined>;
   override?: boolean;
   assign?: boolean;

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed: `loadEnv` / `loadEnvAsync` accept a single string for `paths` and load that one file, instead of reading the string one character at a time and failing with `cannot read .env file at /: EISDIR`. A `paths` value that is neither a string nor an array is rejected with `paths must be a file path or an array of file paths` (fixes #520).
+
 - Fixed: `validateSchema` now rejects a `default` that is not in `choices` (or fails coercion against `choices`) at schema validation time instead of waiting until `validateEnv` runs with the key unset (fixes #519).
 
 ## 1.8.0 — 2026-11-28

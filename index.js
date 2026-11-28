@@ -1888,8 +1888,16 @@ function* loadEnvSteps(schema, options) {
   // An explicitly passed single `path` string is a deliberate instruction, so
   // a missing file there is reported instead of silently skipped (issue #158);
   // the implicit default `.env` and list forms keep the skip behaviour.
+  // Issue #520: `paths` also takes a single file path, like `path` does.
+  // Iterating a string would read it one character at a time, so `paths: '.env'`
+  // used to fail with EISDIR on `.`; any other non-array is rejected by name.
+  if (pathsOpt !== undefined && typeof pathsOpt !== 'string' && !Array.isArray(pathsOpt)) {
+    throw new EnvSaafError(['paths must be a file path or an array of file paths']);
+  }
   const explicitSinglePath = pathsOpt === undefined && pathOpt !== undefined && !Array.isArray(pathOpt) ? pathOpt : undefined;
-  const fileList = pathsOpt !== undefined ? pathsOpt : (pathOpt !== undefined ? (Array.isArray(pathOpt) ? pathOpt : [pathOpt]) : ['.env']);
+  const fileList = pathsOpt !== undefined
+    ? (typeof pathsOpt === 'string' ? [pathsOpt] : pathsOpt)
+    : (pathOpt !== undefined ? (Array.isArray(pathOpt) ? pathOpt : [pathOpt]) : ['.env']);
   const fileEnv = {};
   // Issue #350: remember the winning file path for each key under layering
   // (later files overwrite earlier ones). Ambient precedence is applied below.
