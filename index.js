@@ -2345,6 +2345,24 @@ function collectEnvReads(text) {
     [/(?<![$\p{ID_Continue}.#])import\.meta\.env\?\.([A-Za-z_][A-Za-z0-9_]*)/gu, 'import.meta.env'],
     [/(?<![$\p{ID_Continue}.#])import\.meta\.env\?\.\[['"]([A-Za-z_][A-Za-z0-9_.-]*)['"]\]/gu, 'import.meta.env'],
     [/(?<![$\p{ID_Continue}.#])import\.meta\.env\?\.\[`([A-Za-z_][A-Za-z0-9_.-]*)`\]/gu, 'import.meta.env'],
+    // Bun exposes env through the Bun global (issue #461) — same shapes as
+    // process.env, same global boundary, same optional-chaining forms.
+    [/(?<![$\p{ID_Continue}.#])(?:globalThis\.|global\.)?Bun\.env\.([A-Za-z_][A-Za-z0-9_]*)/gu, 'Bun.env'],
+    [/(?<![$\p{ID_Continue}.#])(?:globalThis\.|global\.)?Bun\.env\[['"]([A-Za-z_][A-Za-z0-9_.-]*)['"]\]/gu, 'Bun.env'],
+    [/(?<![$\p{ID_Continue}.#])(?:globalThis\.|global\.)?Bun\.env\[`([A-Za-z_][A-Za-z0-9_.-]*)`\]/gu, 'Bun.env'],
+    [/(?<![$\p{ID_Continue}.#])(?:globalThis\.|global\.)?Bun\.env\?\.([A-Za-z_][A-Za-z0-9_]*)/gu, 'Bun.env'],
+    [/(?<![$\p{ID_Continue}.#])(?:globalThis\.|global\.)?Bun\.env\?\.\[['"]([A-Za-z_][A-Za-z0-9_.-]*)['"]\]/gu, 'Bun.env'],
+    [/(?<![$\p{ID_Continue}.#])(?:globalThis\.|global\.)?Bun\.env\?\.\[`([A-Za-z_][A-Za-z0-9_.-]*)`\]/gu, 'Bun.env'],
+    // Deno has no indexable env object: reads go through Deno.env.get('KEY')
+    // (and the presence check Deno.env.has('KEY')) with a static literal
+    // (issue #462). Dynamic keys and template interpolation stay unmatched.
+    // `Deno.env.toObject()` returns everything, so no single key is reported.
+    [/(?<![$\p{ID_Continue}.#])(?:globalThis\.|global\.)?Deno\.env\.get\s*\(\s*['"]([A-Za-z_][A-Za-z0-9_.-]*)['"]\s*\)/gu, 'Deno.env.get'],
+    [/(?<![$\p{ID_Continue}.#])(?:globalThis\.|global\.)?Deno\.env\.get\s*\(\s*`([A-Za-z_][A-Za-z0-9_.-]*)`\s*\)/gu, 'Deno.env.get'],
+    [/(?<![$\p{ID_Continue}.#])(?:globalThis\.|global\.)?Deno\.env\?\.get\s*\(\s*['"]([A-Za-z_][A-Za-z0-9_.-]*)['"]\s*\)/gu, 'Deno.env?.get'],
+    [/(?<![$\p{ID_Continue}.#])(?:globalThis\.|global\.)?Deno\.env\.has\s*\(\s*['"]([A-Za-z_][A-Za-z0-9_.-]*)['"]\s*\)/gu, 'Deno.env.has'],
+    [/(?<![$\p{ID_Continue}.#])(?:globalThis\.|global\.)?Deno\.env\.has\s*\(\s*`([A-Za-z_][A-Za-z0-9_.-]*)`\s*\)/gu, 'Deno.env.has'],
+    [/(?<![$\p{ID_Continue}.#])(?:globalThis\.|global\.)?Deno\.env\?\.has\s*\(\s*['"]([A-Za-z_][A-Za-z0-9_.-]*)['"]\s*\)/gu, 'Deno.env?.has'],
   ];
   // The read itself must be code: a `process.env.X` in a comment or a string is
   // not a read. Bracket and destructured reads keep their key in a literal, so
@@ -2360,7 +2378,7 @@ function collectEnvReads(text) {
   const codeView = code.split(MASKED).join(' ');
   // `=\s*` already bounds `process` on the left here; only the `global.` /
   // `globalThis.` prefix is new (issue #455), and only in front of `process.env`.
-  const destructure = /(?:const|let|var)\s*\{([^}]+)\}\s*=\s*(?:(?:globalThis\.|global\.)?process\.env|import\.meta\.env)/g;
+  const destructure = /(?:const|let|var)\s*\{([^}]+)\}\s*=\s*(?:(?:globalThis\.|global\.)?process\.env|import\.meta\.env|(?:globalThis\.|global\.)?Bun\.env)/g;
   for (const m of codeView.matchAll(destructure)) {
     const start = m.index + m[0].indexOf('{') + 1;
     let offset = 0;
@@ -2381,7 +2399,7 @@ function collectEnvReads(text) {
   // Issue #459: `function f({ A } = process.env)` and arrow-parameter defaults
   // read env keys too. The `(`,` before the pattern keeps statement
   // destructuring above from being counted twice.
-  const parameterDestructure = /(?<=[(,])\s*\{([^}]+)\}\s*=\s*(?:(?:globalThis\.|global\.)?process\.env|import\.meta\.env)/g;
+  const parameterDestructure = /(?<=[(,])\s*\{([^}]+)\}\s*=\s*(?:(?:globalThis\.|global\.)?process\.env|import\.meta\.env|(?:globalThis\.|global\.)?Bun\.env)/g;
   for (const m of codeView.matchAll(parameterDestructure)) {
     const start = m.index + m[0].indexOf('{') + 1;
     let offset = 0;
@@ -2422,7 +2440,7 @@ function collectEnvReads(text) {
   };
 
   const declaration = /(?<![$\p{ID_Continue}.])(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=/gu;
-  const directSource = /(?:process\.env|import\.meta\.env)/y;
+  const directSource = /(?:process\.env|import\.meta\.env|Bun\.env)/y;
   for (const m of src.matchAll(declaration)) {
     const afterEquals = m.index + m[0].length;
     if (!isCode(m.index, afterEquals) || aliases.has(m[1])) continue;
@@ -2434,8 +2452,9 @@ function collectEnvReads(text) {
   // object. Reads through `p.env.X` must be reported just like `process.env.X`.
   // The bare source check excludes `process.env` and longer identifiers, and
   // only declarations count, so a parameter or import named `process` is safe.
+  // Issue #461: `const b = Bun` is the same shape — `b.env.X` reads Bun.env.
   const processObjectAliases = new Map();
-  const bareProcess = /process(?![\w$.])/y;
+  const bareProcess = /(?:process|Bun)(?![\w$.])/y;
   for (const m of src.matchAll(declaration)) {
     const afterEquals = m.index + m[0].length;
     if (!isCode(m.index, afterEquals) || aliases.has(m[1])) continue;
@@ -2445,8 +2464,9 @@ function collectEnvReads(text) {
 
   // Issue #425: `const { env } = process` and `const { env: myEnv } = process`
   // create file-local aliases for `process.env` under the same boundary rules.
+  // Issue #461: `const { env } = Bun` is the same shape for `Bun.env`.
   const destructureAlias = /(?<![$\p{ID_Continue}.])(?:const|let|var)\s*\{/gu;
-  const processSource = /process/y;
+  const processSource = /(?:process|Bun)/y;
   for (const m of src.matchAll(destructureAlias)) {
     const openBrace = m.index + m[0].length - 1;
     if (!isCode(m.index, openBrace + 1)) continue;
@@ -2660,7 +2680,7 @@ function buildLocationsMap(reads, file) {
   return locations;
 }
 
-/** Find every env read in JS/TS source text - `process.env.KEY` and Vite-style `import.meta.env.KEY`. Returns sorted unique names. */
+/** Find every env read in JS/TS source text — `process.env.KEY`, Vite-style `import.meta.env.KEY`, `Bun.env.KEY` and `Deno.env.get('KEY')`. Returns sorted unique names. */
 function scanCode(text) {
   expectString('scanCode', text, 'source text');
   const keys = new Set();
