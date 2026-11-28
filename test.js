@@ -877,6 +877,49 @@ assert.deepStrictEqual(scanCode("import { env } from './config'; env.FOO;"), [])
 assert.deepStrictEqual(scanCode("const { env } = require('./config'); env.FOO;"), []);
 assert.deepStrictEqual(scanCode("import env from 'node:process'; env.FOO;"), []);
 assert.deepStrictEqual(diffEnv(['A', 'B'], ['A', 'C']), { usedNotDocumented: ['B'], documentedNotUsed: ['C'] });
+// Issue #461: Bun.env reads are env reads too — dot, bracket, backtick,
+// optional chaining, destructuring, aliases, and the Bun object alias.
+assert.deepStrictEqual(scanCode('const k = Bun.env.BUN_KEY;'), ['BUN_KEY']);
+assert.deepStrictEqual(
+  scanCode("const a = Bun.env['BUN_A']; const b = Bun.env[`BUN_B`]; Bun.env?.BUN_C; Bun.env?.['BUN_D'];"),
+  ['BUN_A', 'BUN_B', 'BUN_C', 'BUN_D']);
+assert.deepStrictEqual(scanCode('const { BUN_E } = Bun.env;'), ['BUN_E']);
+assert.deepStrictEqual(scanCode('function f({ BUN_F } = Bun.env) { return BUN_F; }'), ['BUN_F']);
+assert.deepStrictEqual(scanCode('const env = Bun.env; const x = env.BUN_G;'), ['BUN_G']);
+assert.deepStrictEqual(scanCode('const { env } = Bun; env.BUN_H;'), ['BUN_H']);
+assert.deepStrictEqual(scanCode('const b = Bun; const x = b.env.BUN_I;'), ['BUN_I']);
+assert.deepStrictEqual(scanCode('const b = Bun; const { BUN_J } = b.env;'), ['BUN_J']);
+assert.deepStrictEqual(scanCode('const { env: myEnv } = Bun; myEnv.BUN_K;'), ['BUN_K']);
+assert.deepStrictEqual(scanCode('globalThis.Bun.env.BUN_L;'), ['BUN_L']);
+// ...but a longer identifier or a property of another object is not Bun.env.
+for (const text of [
+  'const x = myBun.env.BUN_NOPE;', 'const x = foo.Bun.env.BUN_NOPE;',
+  'const x = this.Bun.env.BUN_NOPE;', 'const x = Bun.envx.BUN_NOPE;',
+]) {
+  assert.deepStrictEqual(scanCode(text), [], text);
+}
+// Comments and strings are not reads.
+assert.deepStrictEqual(scanCode('// Bun.env.BUN_NOPE\nconst s = "Bun.env.BUN_ALSO_NOPE";'), []);
+
+// Issue #462: Deno.env.get('KEY') / .has('KEY') read the key; Deno.env has
+// no indexable form, so Deno.env.KEY is not a read.
+assert.deepStrictEqual(scanCode("const k = Deno.env.get('DENO_KEY');"), ['DENO_KEY']);
+assert.deepStrictEqual(
+  scanCode('Deno.env.get("DENO_A"); Deno.env.get(`DENO_B`); Deno.env.has("DENO_C");'),
+  ['DENO_A', 'DENO_B', 'DENO_C']);
+assert.deepStrictEqual(scanCode("Deno.env?.get('DENO_D'); Deno.env?.has('DENO_E');"), ['DENO_D', 'DENO_E']);
+assert.deepStrictEqual(scanCode("globalThis.Deno.env.get('DENO_F');"), ['DENO_F']);
+// Dynamic keys cannot be known statically; toObject() names no single key;
+// set() writes rather than reads; a longer identifier is not Deno.env.
+for (const text of [
+  'Deno.env.get(key);', "Deno.env.get('A' + 'B');", 'Deno.env.get(`PRE_${x}`);',
+  'const all = Deno.env.toObject();', 'Deno.env.KEY;', 'Deno.env.set("DENO_SET", "1");',
+  'const x = foo.Deno.env.get("DENO_NOPE");', 'const x = myDeno.env.get("DENO_NOPE");',
+]) {
+  assert.deepStrictEqual(scanCode(text), [], text);
+}
+assert.deepStrictEqual(scanCode('// Deno.env.get("DENO_NOPE")\nconst s = "Deno.env.get(\\"DENO_ALSO_NOPE\\")";'), []);
+
 // Issue #457: both key lists must be arrays, and the message names the argument.
 for (const value of [null, undefined, 'A', new Set(['A']), { A: 1 }]) {
   assert.throws(() => diffEnv(value, ['A']), { name: 'TypeError', message: 'env-saaf: diffEnv expects "usedKeys" to be an array' });

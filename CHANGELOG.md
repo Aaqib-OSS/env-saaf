@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added: `scanCode` / `scanDir` (and so `scan` and `check`) now detect `Bun.env` reads — dot, bracket, backtick and optional-chaining forms, destructuring, `const env = Bun.env` aliases and `const b = Bun` object aliases — and `Deno.env.get('KEY')` / `Deno.env.has('KEY')` with a static literal. `Deno.env` has no indexable form, so `Deno.env.KEY` and `toObject()` report no single key (fixes #461, #462).
+
 - Fixed: the init round-trip CLI test now asserts the intended #506 behaviour — `check --schema` counts schema keys as used, so a fresh `init` scaffold passes the check instead of failing on `UNUSED: APP_NAME`. The test was still asserting the pre-#506 behaviour, so `npm test` failed on `main` (fixes #518).
 
 - Added: `toJsonSchema` preserves `conflictsWith` as `allOf`/`not` constraints, deduplicates reciprocal pairs, resolves grouped keys to nested JSON paths, and composes with existing `requiredIf` clauses (fixes #465).
