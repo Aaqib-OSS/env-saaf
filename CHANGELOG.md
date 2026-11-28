@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed: `loadEnv` / `loadEnvAsync` accept a single string for `paths` and load that one file, instead of reading the string one character at a time and failing with `cannot read .env file at /: EISDIR`. A `paths` value that is neither a string nor an array is rejected with `paths must be a file path or an array of file paths` (fixes #520).
+
 ## 1.8.0 — 2026-11-28
 
 - Added: `scanCode` / `scanDir` (and so `scan` and `check`) now detect `Bun.env` reads — dot, bracket, backtick and optional-chaining forms, destructuring, `const env = Bun.env` aliases and `const b = Bun` object aliases — and `Deno.env.get('KEY')` / `Deno.env.has('KEY')` with a static literal. `Deno.env` has no indexable form, so `Deno.env.KEY` and `toObject()` report no single key (fixes #461, #462).

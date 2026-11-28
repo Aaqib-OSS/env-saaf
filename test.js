@@ -10124,6 +10124,30 @@ const crossFieldRulesTest = (async () => {
   );
 }
 
-Promise.all([watchModeTest, watchModeErrorPathTest, watchModeEsmSchemaTest, loadEnvAsyncTest, layeredInterpolationTest, formatErrorThrowingHookTest, loadEnvSourceErrorsTest, conflictsWithTest, interpolationOperatorsTest, crossFieldRulesTest])
+// Issue #520: `paths` takes a single file path too, for both loaders; a
+// string used to be iterated character by character (EISDIR on `/` or `.`).
+const pathsStringTest = (async () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const { loadEnv, loadEnvAsync } = require('./index');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'env-saaf-paths-string-'));
+  const file = path.join(dir, '.env');
+  fs.writeFileSync(file, 'A=from-file\n');
+  const schema = { A: { type: 'string' } };
+  try {
+    assert.deepStrictEqual(loadEnv(schema, { paths: file, env: {} }), { A: 'from-file' });
+    assert.deepStrictEqual(await loadEnvAsync(schema, { paths: file, env: {} }), { A: 'from-file' });
+    for (const bad of [42, { file }, null, true]) {
+      const expected = { name: 'EnvSaafError', message: /paths must be a file path or an array of file paths/ };
+      assert.throws(() => loadEnv(schema, { paths: bad, env: {} }), expected);
+      await assert.rejects(loadEnvAsync(schema, { paths: bad, env: {} }), expected);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+})();
+
+Promise.all([pathsStringTest, watchModeTest, watchModeErrorPathTest, watchModeEsmSchemaTest, loadEnvAsyncTest, layeredInterpolationTest, formatErrorThrowingHookTest, loadEnvSourceErrorsTest, conflictsWithTest, interpolationOperatorsTest, crossFieldRulesTest])
   .then(() => console.log('env-saaf v1.5.0: all tests passed'))
   .catch((err) => { console.error(err); process.exit(1); });
