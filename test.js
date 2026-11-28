@@ -10124,6 +10124,39 @@ const crossFieldRulesTest = (async () => {
   );
 }
 
+// Issue #519: validateSchema rejects a default that is not in `choices` (or fails coercion).
+{
+  assert.throws(
+    () => validateSchema({ A: { type: 'string', choices: ['x', 'y'], default: 'z' } }),
+    err => err instanceof EnvSaafError && err.errors.some(m => m.startsWith('A: ') && m.includes('"default"') && m.includes('got "z"')),
+  );
+  assert.throws(
+    () => validateSchema({ PORT_CHOICE: { type: 'int', choices: [80, 443], default: 8080 } }),
+    err => err instanceof EnvSaafError && err.errors.some(m => m.startsWith('PORT_CHOICE: ')),
+  );
+  assert.throws(
+    () => validateSchema({ BAD_COERCE: { type: 'int', choices: [1, 2], default: 'nope' } }),
+    err => err instanceof EnvSaafError && err.errors.some(m => m.startsWith('BAD_COERCE: ')),
+  );
+  assert.throws(
+    () => validateSchema({ ARR: { type: 'array', choices: ['a', 'b'], default: ['a', 'z'] } }),
+    err => err instanceof EnvSaafError && err.errors.some(m => m.startsWith('ARR: ') && m.includes('got "z"') && m.includes('item 1')),
+  );
+  assert.throws(
+    () => validateSchema({ SECRET_CHOICE: { choices: ['alpha', 'beta'], default: 'gamma_secret', sensitive: true } }),
+    err => err instanceof EnvSaafError && err.errors.some(m => m.startsWith('SECRET_CHOICE: ') && !m.includes('gamma_secret')),
+  );
+  // Valid defaults (including coerced string/duration defaults and arrays) still pass.
+  assert.doesNotThrow(() => validateSchema({
+    MODE: { type: 'string', choices: ['x', 'y'], default: 'x' },
+    RETRIES: { type: 'int', choices: [0, 2], default: '0' },
+    FLAG: { type: 'boolean', choices: [false, true], default: 'no' },
+    TTL: { type: 'duration', choices: ['5s', 10000], default: '10s' },
+    TAGS: { type: 'array', choices: ['a', 'b'], default: ['b', 'a'] },
+    RAW_JSON: { type: 'json', choices: [null, 'ok', 1], default: null },
+  }));
+}
+
 Promise.all([watchModeTest, watchModeErrorPathTest, watchModeEsmSchemaTest, loadEnvAsyncTest, layeredInterpolationTest, formatErrorThrowingHookTest, loadEnvSourceErrorsTest, conflictsWithTest, interpolationOperatorsTest, crossFieldRulesTest])
   .then(() => console.log('env-saaf v1.5.0: all tests passed'))
   .catch((err) => { console.error(err); process.exit(1); });
