@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed: the init round-trip CLI test now asserts the intended #506 behaviour — `check --schema` counts schema keys as used, so a fresh `init` scaffold passes the check instead of failing on `UNUSED: APP_NAME`. The test was still asserting the pre-#506 behaviour, so `npm test` failed on `main` (fixes #518).
+
 - Added: `toJsonSchema` preserves `conflictsWith` as `allOf`/`not` constraints, deduplicates reciprocal pairs, resolves grouped keys to nested JSON paths, and composes with existing `requiredIf` clauses (fixes #465).
 
 - Fixed: the public helpers name themselves when called with the wrong type. `parseEnvFile`, `scanCode`, `scanCodeLocations`, `scanDir` and `scanDirLocations` throw a `TypeError` for a non-string (a `Buffer` included: decode it with `'utf8'` first) instead of a misleading `line 1: expected KEY=VALUE`, a raw path error or a silent empty result; `diffEnv` throws one when either key list is not an array. `generateExample` rejects a non-object schema with the same `Invalid schema: schema must be an object` error as `validateSchema` and `toJsonSchema`. The empty string is still valid, and `maskSecrets` stays permissive (fixes #457).
